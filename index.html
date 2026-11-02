@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Парабола-Тюнер | Квадратичная функция</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        .game-container {
+            display: flex;
+            gap: 20px;
+            background: #16213e;
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        canvas {
+            background: #0f3460;
+            border-radius: 15px;
+            display: block;
+            border: 2px solid #533483;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            width: 260px;
+            padding: 10px;
+        }
+        h1 {
+            font-size: 22px;
+            margin-top: 0;
+            color: #e94560;
+            text-align: center;
+        }
+        .slider-container {
+            margin: 20px 0 10px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #f1c40f;
+        }
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+            accent-color: #e94560;
+        }
+        .value-display {
+            font-size: 28px;
+            text-align: center;
+            font-weight: bold;
+            color: #4ecca3;
+            margin: 10px 0;
+            text-shadow: 0 0 10px rgba(78, 204, 163, 0.5);
+        }
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            background: #1a1a2e;
+            margin-top: 15px;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+        .status.success {
+            background: #2ecc71;
+            color: #000;
+            box-shadow: 0 0 25px #2ecc71;
+            animation: pulse 0.5s ease;
+        }
+        @keyframes pulse {
+            0%   { transform: scale(1); }
+            50%  { transform: scale(1.06); }
+            100% { transform: scale(1); }
+        }
+        .scoreboard {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            background: #0f3460;
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 14px;
+        }
+        .score-item {
+            text-align: center;
+            flex: 1;
+        }
+        .score-item .num {
+            display: block;
+            font-size: 22px;
+            font-weight: bold;
+            color: #4ecca3;
+        }
+        .score-item .lbl {
+            color: #aaa;
+            font-size: 11px;
+        }
+        button {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: 0.2s;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #c0392b;
+            transform: scale(1.02);
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .hint {
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <canvas id="graphCanvas" width="500" height="500"></canvas>
+    
+    <div class="controls">
+        <h1>Парабола-Тюнер</h1>
+        <p style="text-align:center; font-size:13px; color:#aaa; margin:0;">Подгони синюю параболу под красную цель</p>
+        
+        <div class="slider-container">
+            <label for="aSlider">Коэффициент a =</label>
+            <div class="value-display" id="aValue">1.00</div>
+            <input type="range" id="aSlider" min="-2" max="2" step="0.01" value="1">
+        </div>
+
+        <div class="status" id="status">Крути ползунок!</div>
+
+        <div class="scoreboard">
+            <div class="score-item">
+                <span class="num" id="scoreCorrect">0</span>
+                <span class="lbl">Угадано</span>
+            </div>
+            <div class="score-item">
+                <span class="num" id="scoreTotal">0</span>
+                <span class="lbl">Всего целей</span>
+            </div>
+            <div class="score-item">
+                <span class="num" id="scoreStreak">0</span>
+                <span class="lbl">Серия 🔥</span>
+            </div>
+        </div>
+        
+        <button id="newTargetBtn">🎯 Новая цель</button>
+        <div class="hint">Совет: если ветви вниз — a &lt; 0. Чем больше |a|, тем уже парабола.</div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('graphCanvas');
+    const ctx = canvas.getContext('2d');
+    const aSlider = document.getElementById('aSlider');
+    const aValueDisplay = document.getElementById('aValue');
+    const statusDiv = document.getElementById('status');
+    const newTargetBtn = document.getElementById('newTargetBtn');
+
+    const scoreCorrectEl = document.getElementById('scoreCorrect');
+    const scoreTotalEl = document.getElementById('scoreTotal');
+    const scoreStreakEl = document.getElementById('scoreStreak');
+
+    // Параметры системы координат
+    const width = canvas.width;
+    const height = canvas.height;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const scale = 40;
+
+    // Состояние игры
+    let targetA = 1.0;
+    let currentA = 1.0;
+    let scoreCorrect = 0;
+    let scoreTotal = 0;
+    let scoreStreak = 0;
+    let wasHit = false; // защита от повторного срабатывания звука
+
+    // ===== Звук через Web Audio API =====
+    let audioCtx = null;
+    function playHitSound() {
+        try {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            // Два коротких тона (мажорная терция) — приятный «дзынь»
+            const now = audioCtx.currentTime;
+            [880, 1108.73].forEach((freq, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.0001, now + i * 0.08);
+                gain.gain.exponentialRampToValueAtTime(0.2, now + i * 0.08 + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.08 + 0.35);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now + i * 0.08);
+                osc.stop(now + i * 0.08 + 0.4);
+            });
+        } catch (e) {
+            console.warn('Звук недоступен:', e);
+        }
+    }
+
+    // ===== Логика целей =====
+    function generateNewTarget() {
+        do {
+            targetA = (Math.random() * 4 - 2);
+        } while (Math.abs(targetA) < 0.2);
+
+        targetA = Math.round(targetA * 100) / 100;
+
+        currentA = 1.0;
+        aSlider.value = currentA;
+        wasHit = false;
+        scoreTotal++;
+        scoreTotalEl.textContent = scoreTotal;
+
+        updateDisplay();
+        draw();
+    }
+
+    function updateDisplay() {
+        aValueDisplay.textContent = currentA.toFixed(2);
+        const isHit = Math.abs(currentA - targetA) < 0.06;
+
+        if (isHit) {
+            statusDiv.textContent = "✅ ПОПАДАНИЕ! Отлично!";
+            statusDiv.classList.add('success');
+
+            // Фиксируем успех ТОЛЬКО при первом входе в зону
+            if (!wasHit) {
+                wasHit = true;
+                scoreCorrect++;
+                scoreStreak++;
+                scoreCorrectEl.textContent = scoreCorrect;
+                scoreStreakEl.textContent = scoreStreak;
+                playHitSound();
+
+                // Блокируем ползунок и кнопку на мгновение, чтобы дать насладиться
+                aSlider.disabled = true;
+                newTargetBtn.disabled = true;
+                setTimeout(() => {
+                    aSlider.disabled = false;
+                    newTargetBtn.disabled = false;
+                    generateNewTarget();
+                }, 1100);
+            }
+        } else {
+            statusDiv.textContent = "Ищем...";
+            statusDiv.classList.remove('success');
+        }
+    }
+
+    // ===== Отрисовка =====
+    function draw() {
+        ctx.clearRect(0, 0, width, height);
+
+        // Сетка
+        ctx.strokeStyle = '#1f4287';
+        ctx.lineWidth = 1;
+        for (let x = centerX % scale; x < width; x += scale) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+        }
+        for (let y = centerY % scale; y < height; y += scale) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+        }
+
+        // Оси
+        ctx.strokeStyle = '#aaa';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(centerX, 0); ctx.lineTo(centerX, height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, centerY); ctx.lineTo(width, centerY); ctx.stroke();
+
+        // Подписи осей
+        ctx.fillStyle = '#aaa';
+        ctx.font = '12px Arial';
+        ctx.fillText('x', width - 15, centerY - 5);
+        ctx.fillText('y', centerX + 5, 15);
+
+        // Целевая (красная, пунктир)
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(255, 50, 50, 0.6)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([5, 5]);
+        for (let px = 0; px < width; px++) {
+            let x = (px - centerX) / scale;
+            let y = targetA * x * x;
+            let py = centerY - y * scale;
+            if (px === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Текущая (синяя, яркая)
+        ctx.beginPath();
+        ctx.strokeStyle = '#4ecca3';
+        ctx.lineWidth = 4;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#4ecca3';
+        for (let px = 0; px < width; px++) {
+            let x = (px - centerX) / scale;
+            let y = currentA * x * x;
+            let py = centerY - y * scale;
+            if (px === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+
+    // ===== Слушатели =====
+    aSlider.addEventListener('input', (e) => {
+        currentA = parseFloat(e.target.value);
+        updateDisplay();
+        draw();
+    });
+
+    newTargetBtn.addEventListener('click', generateNewTarget);
+
+    // Запуск
+    generateNewTarget();
+    draw();
+</script>
+</body>
+</html>
